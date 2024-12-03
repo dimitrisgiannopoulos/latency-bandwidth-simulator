@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Latency and Bandwidth Simulation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+        }
+
+        #slider {
+            margin: 20px auto;
+            width: 50%;
+        }
+
+        .color-display {
+            height: 100px;
+            width: 100%;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Latency and Bandwidth Simulation</h1>
+    <div id="slider">
+        <label for="ar-level">How heavy is the AR app?</label>
+        <input type="range" id="ar-level" min="1" max="3" step="1" value="1">
+        <span id="level-display">Light</span>
+    </div>
+    <button id="simulate-btn">Simulate</button>
+    <div id="rtt-display">RTT: - ms</div>
+    <div class="color-display" id="color-display"></div>
+
+    <script>
+        const simulateBtn = document.getElementById('simulate-btn');
+        const rttDisplay = document.getElementById('rtt-display');
+        const colorDisplay = document.getElementById('color-display');
+        const arLevel = document.getElementById('ar-level');
+        const levelDisplay = document.getElementById('level-display');
+
+        const levels = ['Light', 'Medium', 'Heavy'];
+
+        // Update level display when slider changes
+        arLevel.addEventListener('input', () => {
+            const level = levels[arLevel.value - 1];
+            levelDisplay.textContent = level;
+        });
+
+        // Simulate request
+        simulateBtn.addEventListener('click', async () => {
+            const level = levels[arLevel.value - 1].toLowerCase();
+
+            const startTime = Date.now();
+            const response = await fetch('/simulate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ level })
+            });
+            const result = await response.json();
+
+            const endTime = Date.now();
+            const rtt = endTime - startTime;
+
+            // Update RTT display
+            rttDisplay.textContent = `RTT: ${rtt} ms`;
+
+            // Change color dynamically
+            const color = `hsl(${Math.random() * 360}, 70%, 80%)`;
+            colorDisplay.style.backgroundColor = color;
+        });
+
+        // Continuous RTT update (optional)
+        setInterval(async () => {
+            const startTime = Date.now();
+            const response = await fetch('/simulate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ level: 'light' })
+            });
+            const endTime = Date.now();
+            const rtt = endTime - startTime;
+            rttDisplay.textContent = `RTT: ${rtt} ms`;
+        }, 1000);
+    </script>
+</body>
+</html>
