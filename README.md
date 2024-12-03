@@ -67,8 +67,5 @@ This repository hosts a simple web application designed to simulate latency and 
   - Medium: 5 MB
   - Heavy: 10 MB
 
-## Contributing
-Feel free to open issues or submit pull requests to improve the application.
-
 ## License
-This project is licensed under the MIT License. See the `LICENSE` file for details.
+This project is licensed under the Apache 2.0 License. See the `LICENSE` file for details.
