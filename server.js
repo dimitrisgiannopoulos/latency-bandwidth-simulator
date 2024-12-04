@@ -1,37 +1,116 @@
+const WebSocket = require('ws');
 const express = require('express');
+const http = require('http');
+
 const app = express();
-const port = 3000;
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
 
-// Middleware to parse JSON bodies
-app.use(express.json());
+const PORT = 3000;
 
-// Serve static files (frontend)
-app.use(express.static('public'));
+// Game State
+let gameState = {
+    ball: { x: 250, y: 250, vx: 2, vy: 3 },
+    paddle: { x: 200, width: 100 },
+    score: 0,
+    gameOver: false,
+};
 
-// Endpoint to simulate server response
-app.post('/simulate', (req, res) => {
-    const level = req.body.level || 'light';
+let gameInterval = null;
 
-    // Define payload sizes for different AR levels (in MB)
-    const payloads = {
-        light: { send: 2 * 1024 * 1024, receive: 2 * 1024 * 1024 }, // 2 MB
-        medium: { send: 5 * 1024 * 1024, receive: 5 * 1024 * 1024 }, // 5 MB
-        heavy: { send: 10 * 1024 * 1024, receive: 10 * 1024 * 1024 }, // 10 MB
+// Reset game state
+function resetGameState() {
+    console.log('Resetting game state.');
+    gameState = {
+        ball: { x: 250, y: 250, vx: 2, vy: 3 },
+        paddle: { x: 200, width: 100 },
+        score: 0,
+        gameOver: false,
     };
+}
 
-    const { send, receive } = payloads[level];
+// Broadcast game state
+function broadcastGameState() {
+    wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({ type: 'gameState', gameState }));
+        }
+    });
+}
 
-    // Simulate received data
-    const responsePayload = Buffer.alloc(receive, 'A').toString('base64');
+// Start the game
+function startGame() {
+    console.log('Game started!');
+    resetGameState();
+    broadcastGameState();
 
-    // Respond with simulated data and server timestamp
-    res.json({
-        responsePayload,
-        timestamp: Date.now()
+    if (gameInterval) clearInterval(gameInterval);
+
+    gameInterval = setInterval(() => {
+        if (!gameState.gameOver) {
+            // Update ball position
+            gameState.ball.x += gameState.ball.vx;
+            gameState.ball.y += gameState.ball.vy;
+
+            // Wall collisions
+            if (gameState.ball.x <= 0 || gameState.ball.x >= 500) {
+                gameState.ball.vx *= -1;
+            }
+            if (gameState.ball.y <= 0) {
+                gameState.ball.vy *= -1;
+            }
+
+            // Paddle collisions
+            if (
+                gameState.ball.y >= 480 &&
+                gameState.ball.x >= gameState.paddle.x &&
+                gameState.ball.x <= gameState.paddle.x + gameState.paddle.width
+            ) {
+                gameState.ball.vy *= -1;
+                gameState.score += 1;
+            }
+
+            // Check for game over
+            if (gameState.ball.y > 500) {
+                gameState.gameOver = true;
+            }
+
+            broadcastGameState();
+        } else {
+            console.log('Game over!');
+            broadcastGameState();
+            clearInterval(gameInterval);
+        }
+    }, 16);
+}
+
+// WebSocket connections
+// Update paddle position on paddleMove
+wss.on('connection', (ws) => {
+    console.log('New connection established.');
+
+    ws.on('message', (message) => {
+        const clientData = JSON.parse(message);
+
+        if (clientData.type === 'paddleMove') {
+            gameState.paddle.x = Math.max(0, Math.min(400, clientData.paddleX)); // Ensure paddle stays within bounds
+            broadcastGameState(); // Update all clients with the new paddle position
+        }
+
+        if (clientData.type === 'startGame') {
+            startGame();
+        }
+    });
+
+    ws.on('close', () => {
+        console.log('Connection closed.');
     });
 });
 
-// Start the server
-app.listen(port, () => {
-    console.log(`App listening on port ${port}`);
+// Serve static files
+app.use(express.static('public'));
+
+// Start server
+server.listen(PORT, () => {
+    console.log(`Server listening on http://localhost:${PORT}`);
 });
