@@ -26,7 +26,7 @@
             padding: 10px 20px;
             font-size: 16px;
         }
-        #rtt {
+        #latency {
             text-align: center;
             margin-top: 10px;
             font-weight: bold;
@@ -36,9 +36,7 @@
 <body>
     <button id="startGame">Start Game</button>
     <canvas id="gameCanvas" width="500" height="500"></canvas>
-    <div id="rtt">Latency: - ms</div>
-    <canvas id="latencyGraph" width="500" height="150" style="border: 1px solid black;"></canvas>
-    <canvas id="bandwidthGraph" width="500" height="150" style="border: 1px solid black;"></canvas>
+    <div id="latency">Latency: - ms</div>
     <div id="controls">
         <button id="leftButton">Left</button>
         <button id="rightButton">Right</button>
@@ -48,6 +46,9 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const startButton = document.getElementById('startGame');
+        const latencyDisplay = document.getElementById('latency');
+        const leftButton = document.getElementById('leftButton');
+        const rightButton = document.getElementById('rightButton');
         let ws = null;
         let gameState = {
             ball: { x: 250, y: 250 },
@@ -56,50 +57,30 @@
             gameOver: false,
         };
     
-        // Establish WebSocket connection
-        function connectWebSocket() {
-            if (ws) ws.close(); // Close any existing WebSocket connection
+        // WebSocket connection
+        function connectWebSocket(callback) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                callback();
+                return;
+            }
     
             ws = new WebSocket('ws://localhost:3000');
     
             ws.onopen = () => {
                 console.log('WebSocket connection established.');
+                measureLatency();
+                if (callback) callback(); // Start game after connection
             };
     
-            let paddleX = 200; // Local paddle position
-
-            function movePaddleLeft() {
-                paddleX = Math.max(0, paddleX - 10); // Ensure paddle doesn't move out of bounds
-                if (ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({ type: 'paddleMove', paddleX }));
-                }
-            }
-
-            function movePaddleRight() {
-                paddleX = Math.min(400, paddleX + 10); // Ensure paddle doesn't move out of bounds
-                if (ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({ type: 'paddleMove', paddleX }));
-                }
-            }
-
-            // Attach keyboard and button event listeners
-            document.addEventListener('keydown', (e) => {
-                if (e.key === 'ArrowLeft') movePaddleLeft();
-                if (e.key === 'ArrowRight') movePaddleRight();
-            });
-
-            document.getElementById('leftButton').addEventListener('mousedown', movePaddleLeft);
-            document.getElementById('rightButton').addEventListener('mousedown', movePaddleRight);
-
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
-
-                if (data.type === 'gameState') {
+                if (data.type === 'pong') {
+                    const latency = Date.now() - data.time;
+                    updateLatencyDisplay(latency);
+                } else if (data.type === 'gameState') {
                     gameState = data.gameState;
-                    paddleX = gameState.paddle.x; // Sync paddle position with server
                 } else if (data.type === 'gameOver') {
                     alert(`Game Over! Your score: ${data.score}`);
-                    ws.close(); // Close WebSocket after game over
                 }
             };
     
@@ -112,22 +93,57 @@
             };
         }
     
-        // Start the game
-        startButton.addEventListener('click', () => {
-            console.log('Start button clicked.');
-            if (!ws || ws.readyState !== WebSocket.OPEN) {
-                connectWebSocket();
+        // Measure latency
+        function measureLatency() {
+            setInterval(() => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    const pingTime = Date.now();
+                    ws.send(JSON.stringify({ type: 'ping', time: pingTime }));
+                }
+            }, 1000);
+        }
+    
+        // Update latency display
+        function updateLatencyDisplay(latency) {
+            latencyDisplay.textContent = `Latency: ${latency} ms`;
+            if (latency <= 50) {
+                latencyDisplay.style.color = 'green';
+            } else if (latency <= 150) {
+                latencyDisplay.style.color = 'yellow';
+            } else {
+                latencyDisplay.style.color = 'red';
+            }
+        }
+    
+        // Paddle movement
+        function movePaddle(direction) {
+            if (direction === 'left') {
+                gameState.paddle.x = Math.max(0, gameState.paddle.x - 20); // Ensure paddle stays in bounds
+            } else if (direction === 'right') {
+                gameState.paddle.x = Math.min(400, gameState.paddle.x + 20);
             }
     
-            setTimeout(() => {
-                // Send startGame request to server
-                if (ws.readyState === WebSocket.OPEN) {
-                    console.log('Sending startGame request to server.');
-                    ws.send(JSON.stringify({ type: 'startGame' }));
-                } else {
-                    console.error('WebSocket is not ready.');
-                }
-            }, 500);
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'paddleMove', paddleX: gameState.paddle.x }));
+            }
+        }
+    
+        // Attach event listeners for on-screen buttons
+        leftButton.addEventListener('click', () => movePaddle('left'));
+        rightButton.addEventListener('click', () => movePaddle('right'));
+    
+        // Event listeners for keyboard controls
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') movePaddle('left');
+            if (e.key === 'ArrowRight') movePaddle('right');
+        });
+    
+        // Start the game
+        startButton.addEventListener('click', () => {
+            connectWebSocket(() => {
+                console.log('Sending startGame request to server.');
+                ws.send(JSON.stringify({ type: 'startGame' }));
+            });
         });
     
         // Render the game
@@ -153,6 +169,6 @@
         }
     
         render();
-    </script>    
+    </script>     
 </body>
 </html>
