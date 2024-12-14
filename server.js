@@ -78,7 +78,13 @@ wss.on('connection', (ws) => {
         const clientData = JSON.parse(message);
 
         if (clientData.type === 'paddleMove') {
-            gameState.paddle.x = Math.max(0, Math.min(400, clientData.paddleX));
+            // Adjust paddle position based on direction (-1 for left, 1 for right)
+            const direction = clientData.direction; // Should be -1 or 1
+            gameState.paddle.x = Math.max(
+                0,
+                Math.min(400, gameState.paddle.x + direction * 20) // Move 20 pixels per step
+            );
+            broadcastGameState(); // Broadcast updated game state to all clients       
         } else if (clientData.type === 'startGame') {
             startGame();
         } else if (clientData.type === 'ping') {
