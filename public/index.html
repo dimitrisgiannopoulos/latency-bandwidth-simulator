@@ -69,7 +69,7 @@
     <div id="controls">
         <button id="leftButton">Left</button>
         <button id="rightButton">Right</button>
-    </div>
+    </div>    
 
     <script>
         const canvas = document.getElementById('gameCanvas');
@@ -85,6 +85,8 @@
             Medium: 500 * 1024, // 500 KB
             Heavy: 1024 * 1024  // 1 MB
         };
+        const serverUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`;
+        // const serverUrl = "ws://localhost:3000";
         let selectedPayloadSize = 'Light'; // Match the initial slider value
         let payloadPadding = 'X'.repeat(paddingLevels[selectedPayloadSize]); // Initialize padding based on the default size
         let ws = null;
@@ -94,7 +96,7 @@
             score: 0,
             gameOver: false,
         };
-    
+        
         // WebSocket connection
         function connectWebSocket(callback) {
             if (ws && ws.readyState === WebSocket.OPEN) {
@@ -102,12 +104,12 @@
                 return;
             }
         
-            ws = new WebSocket('ws://localhost:3000');
-        
+            ws = new WebSocket(serverUrl);
+            
             ws.onopen = () => {
-                console.log('WebSocket connection established.');
+                console.log("WebSocket connection established with", serverUrl);
                 measureLatency();
-        
+                
                 // Send the initial padding level to the server
                 ws.send(JSON.stringify({ type: 'updatePadding', level: selectedPayloadSize }));
                 console.log(`Initial padding level sent to server: ${selectedPayloadSize}`);
