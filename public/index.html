@@ -101,35 +101,60 @@
                 callback();
                 return;
             }
-    
+        
             ws = new WebSocket('ws://localhost:3000');
-    
+        
             ws.onopen = () => {
                 console.log('WebSocket connection established.');
                 measureLatency();
+        
+                // Send the initial padding level to the server
+                ws.send(JSON.stringify({ type: 'updatePadding', level: selectedPayloadSize }));
+                console.log(`Initial padding level sent to server: ${selectedPayloadSize}`);
+        
                 if (callback) callback(); // Start game after connection
             };
-    
+        
             ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                if (data.type === 'pong') {
-                    const latency = Date.now() - data.time;
-                    updateLatencyDisplay(latency);
-                } else if (data.type === 'gameState') {
-                    gameState = data.gameState;
-                } else if (data.type === 'gameOver') {
-                    alert(`Game Over! Your score: ${data.score}`);
+                let data;
+            
+                try {
+                    data = JSON.parse(event.data);
+                } catch (err) {
+                    console.error("Invalid JSON received:", event.data);
+                    return;
                 }
-            };
-    
+            
+                // Check if `data.message` is a string and parse it only if necessary
+                if (typeof data.message === 'string') {
+                    try {
+                        data.message = JSON.parse(data.message);
+                    } catch (err) {
+                        console.error("Invalid JSON in 'message':", data.message);
+                        return;
+                    }
+                }
+            
+                console.log('Received message:', data);
+            
+                if (data.message?.type === 'gameState') {
+                    gameState = data.message.gameState; // Update the game state
+                } else if (data.message?.type === 'pong') {
+                    const latency = Date.now() - data.message.time;
+                    updateLatencyDisplay(latency);
+                } else if (data.message?.type === 'gameOver') {
+                    alert(`Game Over! Your score: ${data.message.score}`);
+                }
+            };             
+        
             ws.onclose = () => {
                 console.log('WebSocket connection closed.');
             };
-    
+        
             ws.onerror = (err) => {
                 console.error('WebSocket error:', err);
             };
-        }
+        }        
     
         // Measure latency
         function measureLatency() {
@@ -168,6 +193,11 @@
                     payloadLabel.textContent = 'Heavy';
                     selectedPayloadSize = 'Heavy';
                     break;
+            }
+
+            // Send the updated padding level to the server
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'updatePadding', level: selectedPayloadSize }));
             }
         });
 

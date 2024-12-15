@@ -17,6 +17,17 @@ let gameState = {
 
 let gameInterval = null;
 
+// Define padding levels
+const paddingLevels = {
+    // Light: 0               // 0 bytes
+    Light: 2 * 1024 * 1024,  // 2 MB
+    Medium: 5 * 1024 * 1024, // 5 MB
+    Heavy: 10 * 1024 * 1024  // 10 MB
+};
+
+// Default padding level
+let selectedPaddingLevel = 'Light';
+
 function resetGameState() {
     gameState = {
         ball: { x: 250, y: 250, vx: 2, vy: 3 },
@@ -27,9 +38,12 @@ function resetGameState() {
 }
 
 function broadcastGameState() {
+    const payloadSize = paddingLevels[selectedPaddingLevel];
+    const paddedMessage = createPaddedMessage({ type: 'gameState', gameState }, payloadSize);
+
     wss.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify({ type: 'gameState', gameState }));
+            client.send(paddedMessage);
         }
     });
 }
@@ -71,6 +85,14 @@ function startGame() {
     }, 16);
 }
 
+// Function to pad messages
+function createPaddedMessage(originalMessage, sizeInBytes) {
+    const originalJSON = JSON.stringify(originalMessage);
+    const paddingLength = Math.max(0, sizeInBytes - originalJSON.length);
+    const padding = 'X'.repeat(paddingLength); // Fill remaining space with "X"
+    return JSON.stringify({ message: originalMessage, padding });
+}
+
 wss.on('connection', (ws) => {
     console.log('New connection established.');
 
@@ -88,7 +110,16 @@ wss.on('connection', (ws) => {
         } else if (clientData.type === 'startGame') {
             startGame();
         } else if (clientData.type === 'ping') {
-            ws.send(JSON.stringify({ type: 'pong', time: clientData.time }));
+            const pongPayloadSize = paddingLevels[selectedPaddingLevel];
+            const paddedPongMessage = createPaddedMessage(
+                { type: 'pong', time: clientData.time },
+                pongPayloadSize
+            );
+            ws.send(paddedPongMessage);
+        } else if (clientData.type === 'updatePadding') {
+            // Update the padding level based on the client's request
+            selectedPaddingLevel = clientData.level;
+            console.log(`Updated padding level to: ${selectedPaddingLevel}`);
         }
     });
 
