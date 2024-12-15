@@ -52,8 +52,8 @@
         #payloadLabel {
             font-weight: bold;
             font-size: 1.2em;
-            display: inline-block; /* Prevent shifting by reserving space */
-            width: 80px; /* Fixed width to accommodate all labels */
+            display: inline-block;
+            width: 80px;
         }
     </style>
 </head>
@@ -82,14 +82,18 @@
         const payloadLabel = document.getElementById('payloadLabel');
         const paddingLevels = {
             NoPadding: 0,          // No padding
-            Light: 100 * 1024,     // 100 KB
-            Medium: 500 * 1024,    // 500 KB
-            Heavy: 1024 * 1024     // 1 MB
+            Light: 50 * 1024,     // 50 KB
+            Medium: 100 * 1024,    // 100 KB
+            Heavy: 250 * 1024     // 250 KB
+        };
+        const paddingCache = {
+            NoPadding: '',
+            Light: 'X'.repeat(paddingLevels.Light),
+            Medium: 'X'.repeat(paddingLevels.Medium),
+            Heavy: 'X'.repeat(paddingLevels.Heavy),
         };
         const serverUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`;
-        // const serverUrl = "ws://localhost:3000";
-        let selectedPayloadSize = 'NoPadding'; // Match the initial slider value
-        let payloadPadding = 'X'.repeat(paddingLevels[selectedPayloadSize]); // Initialize padding based on the default size
+        let selectedPayloadSize = 'NoPadding'; 
         let ws = null;
         let gameState = {
             ball: { x: 250, y: 250 },
@@ -97,7 +101,7 @@
             score: 0,
             gameOver: false,
         };
-        
+
         // WebSocket connection
         function connectWebSocket(callback) {
             if (ws && ws.readyState === WebSocket.OPEN) {
@@ -110,45 +114,46 @@
             ws.onopen = () => {
                 console.log("WebSocket connection established with", serverUrl);
                 measureLatency();
-                
-                // Send the initial padding level to the server
                 ws.send(JSON.stringify({ type: 'updatePadding', level: selectedPayloadSize }));
-                console.log(`Initial padding level sent to server: ${selectedPayloadSize}`);
-        
-                if (callback) callback(); // Start game after connection
+                if (callback) callback();
             };
         
             ws.onmessage = (event) => {
-                let data;
+                const message = event.data;
             
-                try {
-                    data = JSON.parse(event.data);
-                } catch (err) {
-                    console.error("Invalid JSON received:", event.data);
+                // Skip padding messages
+                if (typeof message === 'string' && message.startsWith('PADDING:')) {
                     return;
                 }
             
-                // Check if `data.message` is a string and parse it only if necessary
-                if (typeof data.message === 'string') {
+                // Process game state and other prefixed messages
+                if (message.startsWith('DATA:')) {
                     try {
-                        data.message = JSON.parse(data.message);
+                        const data = JSON.parse(message.slice(5)); // Remove `DATA:` prefix and parse
+                        if (data.type === 'gameState') {
+                            gameState = data.gameState;
+                        } else if (data.type === 'gameOver') {
+                            alert(`Game Over! Your score: ${data.score}`);
+                        }
                     } catch (err) {
-                        console.error("Invalid JSON in 'message':", data.message);
-                        return;
+                        console.error('Error parsing DATA message:', err);
                     }
+                    return;
                 }
             
-                console.log('Received message:', data);
-            
-                if (data.message?.type === 'gameState') {
-                    gameState = data.message.gameState; // Update the game state
-                } else if (data.message?.type === 'pong') {
-                    const latency = Date.now() - data.message.time;
-                    updateLatencyDisplay(latency);
-                } else if (data.message?.type === 'gameOver') {
-                    alert(`Game Over! Your score: ${data.message.score}`);
+                // Handle JSON messages like pong or errors
+                try {
+                    const data = JSON.parse(message);
+                    if (data.type === 'pong') {
+                        const latency = Date.now() - data.time;
+                        updateLatencyDisplay(latency);
+                    } else {
+                        console.warn('Unknown JSON message received:', data);
+                    }
+                } catch (err) {
+                    console.error('Unknown message format:', message);
                 }
-            };             
+            };            
         
             ws.onclose = () => {
                 console.log('WebSocket connection closed.');
@@ -157,9 +162,8 @@
             ws.onerror = (err) => {
                 console.error('WebSocket error:', err);
             };
-        }        
+        }
     
-        // Measure latency
         function measureLatency() {
             setInterval(() => {
                 if (ws && ws.readyState === WebSocket.OPEN) {
@@ -169,72 +173,30 @@
             }, 1000);
         }
     
-        // Update latency display
         function updateLatencyDisplay(latency) {
             latencyDisplay.textContent = `Latency: ${latency} ms`;
-            if (latency <= 50) {
-                latencyDisplay.style.color = 'green';
-            } else if (latency <= 150) {
-                latencyDisplay.style.color = 'yellow';
-            } else {
-                latencyDisplay.style.color = 'red';
-            }
+            latencyDisplay.style.color = latency <= 50 ? 'green' : latency <= 150 ? 'orange' : 'red';
         }
     
-        // Update the label and padding size based on the slider
         payloadSizeSlider.addEventListener('input', () => {
-            switch (payloadSizeSlider.value) {
-                case '0':
-                    payloadLabel.textContent = 'No Padding';
-                    selectedPayloadSize = 'NoPadding';
-                    break;
-                case '1':
-                    payloadLabel.textContent = 'Light';
-                    selectedPayloadSize = 'Light';
-                    break;
-                case '2':
-                    payloadLabel.textContent = 'Medium';
-                    selectedPayloadSize = 'Medium';
-                    break;
-                case '3':
-                    payloadLabel.textContent = 'Heavy';
-                    selectedPayloadSize = 'Heavy';
-                    break;
-            }
-        
-            // Send the updated padding level to the server
+            const levels = ['No Padding', 'Light', 'Medium', 'Heavy'];
+            selectedPayloadSize = levels[payloadSizeSlider.value];
+            payloadLabel.textContent = selectedPayloadSize;
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ type: 'updatePadding', level: selectedPayloadSize }));
             }
         });
 
-        // Paddle movement
         function movePaddle(direction) {
             if (ws && ws.readyState === WebSocket.OPEN) {
-                const paddleDirection = direction === 'left' ? -1 : 1; // -1 for left, 1 for right
-                const originalMessage = JSON.stringify({ type: 'paddleMove', direction: paddleDirection });
-        
-                const payloadSize = paddingLevels[selectedPayloadSize];
-                const paddedMessage = createPaddedMessage(originalMessage, payloadSize);
-        
-                // Send the padded movement message to the server
-                ws.send(paddedMessage);
+                const message = { type: 'paddleMove', direction: direction === 'left' ? -1 : 1 };
+                ws.send(`DATA:${JSON.stringify(message)}`);
+                if (paddingLevels[selectedPayloadSize] > 0) {
+                    ws.send(`PADDING:${paddingCache[selectedPaddingLevel]}`);
+                }
             }
-        }        
-    
-        // Function to generate a padded message
-        function createPaddedMessage(originalMessage, sizeInBytes) {
-            const paddingLength = Math.max(0, sizeInBytes - originalMessage.length);
-            const padding = 'X'.repeat(paddingLength); // Fill the remaining space with "X"
-        
-            // Add padding directly to the original message object
-            const paddedMessageObject = JSON.parse(originalMessage);
-            paddedMessageObject.padding = padding; // Add padding as a separate field
-        
-            return JSON.stringify(paddedMessageObject); // Return the padded message as JSON
         }
 
-        // Attach event listeners for on-screen buttons
         leftButton.addEventListener('click', () => movePaddle('left'));
         rightButton.addEventListener('click', () => movePaddle('right'));
     
@@ -246,35 +208,23 @@
     
         // Start the game
         startButton.addEventListener('click', () => {
-            connectWebSocket(() => {
-                console.log('Sending startGame request to server.');
-                ws.send(JSON.stringify({ type: 'startGame' }));
-            });
+            connectWebSocket(() => ws.send(`DATA:${JSON.stringify({ type: 'startGame' })}`));
         });
     
-        // Render the game
         function render() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-            // Draw the ball
             ctx.beginPath();
             ctx.arc(gameState.ball.x, gameState.ball.y, 10, 0, Math.PI * 2);
             ctx.fillStyle = 'blue';
             ctx.fill();
             ctx.closePath();
-    
-            // Draw the paddle
             ctx.fillStyle = 'black';
             ctx.fillRect(gameState.paddle.x, 480, gameState.paddle.width, 10);
-    
-            // Draw the score
             ctx.font = '16px Arial';
             ctx.fillText(`Score: ${gameState.score}`, 10, 20);
-    
             requestAnimationFrame(render);
         }
-    
         render();
-    </script>     
+    </script>
 </body>
 </html>

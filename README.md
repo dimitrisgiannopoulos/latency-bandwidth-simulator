@@ -1,24 +1,37 @@
 
 # Latency and Bandwidth Simulator
 
-This project provides a real-time WebSocket-based game application designed to simulate network latency and bandwidth conditions. It includes a client application and a server to measure latency and test various payload sizes under simulated conditions.
+This project provides a real-time WebSocket-based game designed to simulate network latency and bandwidth conditions, inspired by applications such as Augmented Reality (AR). The application uses padding to artificially increase message sizes for testing purposes, simulating the behavior of heavier payloads in real-world scenarios.
 
 ## Features
 
-- **WebSocket Communication**: Real-time communication between the client and server.
+- **WebSocket Communication**: Real-time communication between the client and server for gameplay and latency simulation.
 - **Latency Measurement**: Measures round-trip latency using WebSocket `ping-pong` messages.
-- **Payload Simulation**: Adjust the payload size dynamically to simulate light, medium, heavy, or no payloads.
-- **Stop/Restart Game**: Allows stopping and restarting the game for testing purposes.
-- **Responsive Design**: A canvas-based game playable in a web browser.
-- **Configurable WebSocket Server**: Runs in a containerized environment for easy deployment.
+- **Payload Simulation**: Dynamically adjustable payload sizes to simulate varying levels of network load (e.g., Light, Medium, Heavy, or No Payload).
+- **Frame Updates**: The client updates the game state only when new data is received from the server.
+- **Configurable Frame Rate**: The server frame rate and padding frequency are configurable in the code, with the current setup transmitting padded messages every 500ms to simulate state synchronization.
+- **Responsive Gameplay**: A canvas-based game playable in a web browser, including paddle movement and a bouncing ball.
+
+## Simulation Details
+
+1. **Dynamic Payload Sizes**:
+    - **No Payload**: No additional payload is added to messages.
+    - **Light**: ~50 KB added to client messages, ~500 KB added to server messages.
+    - **Medium**: ~100 KB added to client messages, ~1 MB added to server messages.
+    - **Heavy**: ~250 KB added to client messages, ~2.5 MB added to server messages.
+2. **Padding Usage**:
+    - Padding simulates the heavier data loads of AR applications.
+    - The additional padding is dropped as soon as it is received and is not processed further.
+3. **Frame Updates**:
+    - The game frame updates only when the client receives new game state data from the server.
+    - This approach ensures synchronized gameplay but may result in visible delays when large payloads are used.
 
 ## Setup and Usage
 
 ### Prerequisites
 
-1. **Docker**: Install Docker to build and run the container.
-2. **Node.js**: Required for local development.
-3. **AWS ECS** (optional): For deploying the server in the cloud.
+1. **Node.js**: Required for local development.
+2. **Docker**: (Optional) For containerized deployment.
 
 ### Clone the Repository
 
@@ -53,24 +66,18 @@ cd latency-bandwidth-simulator
    ```
 3. Open your browser at `http://localhost:3000`.
 
-### Payload Slider Settings
+### Configurable Options
 
-The application includes a payload slider with the following options:
-
-- **No Payload**: Simulates zero additional payload in the client's and server's messages.
-- **Light**: Sends a payload of about 100 KB in the client's and about 2 MB in the server's messages.
-- **Medium**: Sends a payload of about 500 KB in the client's and about 5 MB in the server's messages.
-- **Heavy**: Sends a payload of about 1 MB in the client's and about 10 MB in the server's messages.
-
-Adjusting the slider updates the payload size dynamically during gameplay. The reason, is to simulate heavier applications, which normally send heavier payloads.
-
-## Starting the Game
-
-- **Start Game**: Use the "Start Game" button to connect and start the game.
+1. **Payload Slider Settings**:
+    - Adjust the payload slider in the client to simulate different payload sizes.
+    - This dynamically updates the payload size during gameplay.
+2. **Server Configuration**:
+    - **Frame Rate**: Configurable in the server code (`updateInterval`, currently set to 16ms or ~60 FPS).
+    - **State Sync**: The server sends padded messages every 500ms to simulate state synchronization.
+3. **Client Padding**:
+    - Padded messages are sent to the server each time a move action is triggered (e.g., paddle movement).
 
 ## Measuring Latency
-
-The application measures round-trip time (RTT) as the latency:
 
 1. The client sends a `ping` message with a timestamp.
 2. The server responds with a `pong` message.
@@ -78,7 +85,7 @@ The application measures round-trip time (RTT) as the latency:
 
 ## Known Issues
 
-- High payload sizes (e.g., Heavy) may lead to increased CPU usage and browser lag.
+- High payload sizes (e.g., Heavy) may cause visible delays due to network congestion or browser rendering limitations.
 
 ## License
 

@@ -8,6 +8,9 @@ const wss = new WebSocket.Server({ server });
 
 const PORT = 3000;
 
+const updateInterval = 16; // 60 FPS
+const syncInterval = 500; // State sync every 500ms
+
 let gameState = {
     ball: { x: 250, y: 250, vx: 2, vy: 3 },
     paddle: { x: 200, width: 100 },
@@ -16,16 +19,23 @@ let gameState = {
 };
 
 let gameInterval = null;
+let lastSyncTime = 0;
 
-// Define padding levels
+// Padding levels
 const paddingLevels = {
     NoPadding: 0,          // No padding
-    Light: 2 * 1024 * 1024,  // 2 MB
-    Medium: 5 * 1024 * 1024, // 5 MB
-    Heavy: 10 * 1024 * 1024  // 10 MB
+    Light: 0.5 * 1024 * 1024,  // 500 KB
+    Medium: 1 * 1024 * 1024, // 1 MB
+    Heavy: 2.5 * 1024 * 1024  // 2.5 MB
 };
 
-// Default padding level
+const paddingCache = {
+    NoPadding: '',
+    Light: 'X'.repeat(paddingLevels.Light),
+    Medium: 'X'.repeat(paddingLevels.Medium),
+    Heavy: 'X'.repeat(paddingLevels.Heavy),
+};
+
 let selectedPaddingLevel = 'NoPadding';
 
 function resetGameState() {
@@ -38,12 +48,21 @@ function resetGameState() {
 }
 
 function broadcastGameState() {
-    const payloadSize = paddingLevels[selectedPaddingLevel];
-    const paddedMessage = createPaddedMessage({ type: 'gameState', gameState }, payloadSize);
+    const now = Date.now();
+    const gameStateMessage = `DATA:${JSON.stringify({ type: 'gameState', gameState })}`;
+    const isSyncTime = now - lastSyncTime >= syncInterval;
 
     wss.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
-            client.send(paddedMessage);
+            client.send(gameStateMessage); // Send game state
+
+            if (isSyncTime) {
+                lastSyncTime = now;
+                const padding = paddingCache[selectedPaddingLevel];
+                if (padding.length > 0) {
+                    client.send(`PADDING:${padding}`);
+                }
+            }
         }
     });
 }
@@ -82,50 +101,59 @@ function startGame() {
         } else {
             clearInterval(gameInterval);
         }
-    }, 16);
-}
-
-// Function to pad messages
-function createPaddedMessage(originalMessage, sizeInBytes) {
-    const originalJSON = JSON.stringify(originalMessage);
-    const paddingLength = Math.max(0, sizeInBytes - originalJSON.length);
-    const padding = 'X'.repeat(paddingLength); // Fill remaining space with "X"
-    return JSON.stringify({ message: originalMessage, padding });
+    }, updateInterval);
 }
 
 wss.on('connection', (ws) => {
     console.log('New connection established.');
 
     ws.on('message', (message) => {
-        const clientData = JSON.parse(message);
+        const messageString = message.toString(); // Convert Buffer to string
 
-        if (clientData.type === 'paddleMove') {
-            // Adjust paddle position based on direction (-1 for left, 1 for right)
-            const direction = clientData.direction; // Should be -1 or 1
-            gameState.paddle.x = Math.max(
-                0,
-                Math.min(400, gameState.paddle.x + direction * 20) // Move 20 pixels per step
-            );
-            broadcastGameState(); // Broadcast updated game state to all clients       
-        } else if (clientData.type === 'startGame') {
-            startGame();
-        } else if (clientData.type === 'ping') {
-            const pongPayloadSize = paddingLevels[selectedPaddingLevel];
-            const paddedPongMessage = createPaddedMessage(
-                { type: 'pong', time: clientData.time },
-                pongPayloadSize
-            );
-            ws.send(paddedPongMessage);
-        } else if (clientData.type === 'updatePadding') {
-            // Update the padding level based on the client's request
-            selectedPaddingLevel = clientData.level;
-            console.log(`Updated padding level to: ${selectedPaddingLevel}`);
+        // Ignore padding messages
+        if (messageString.startsWith('PADDING:')) {
+            return;
+        }
+
+        // Handle messages with `DATA:` prefix
+        if (messageString.startsWith('DATA:')) {
+            try {
+                const data = JSON.parse(messageString.slice(5)); // Remove `DATA:` prefix and parse
+                if (data.type === 'paddleMove') {
+                    const direction = data.direction;
+                    gameState.paddle.x = Math.max(
+                        0,
+                        Math.min(400, gameState.paddle.x + direction * 20)
+                    );
+                    broadcastGameState();
+                } else if (data.type === 'startGame') {
+                    startGame();
+                } else {
+                    console.warn('Unknown DATA message type:', data);
+                }
+            } catch (err) {
+                console.error('Invalid DATA message:', messageString, err);
+            }
+            return;
+        }
+
+        // Handle JSON messages like ping or updatePadding
+        try {
+            const data = JSON.parse(messageString);
+            if (data.type === 'ping') {
+                ws.send(JSON.stringify({ type: 'pong', time: data.time }));
+            } else if (data.type === 'updatePadding') {
+                selectedPaddingLevel = data.level || 'NoPadding';
+                console.log(`Updated padding level to: ${selectedPaddingLevel}`);
+            } else {
+                console.warn('Unknown JSON message received:', data);
+            }
+        } catch (err) {
+            console.error('Unrecognized message format:', messageString, err);
         }
     });
 
-    ws.on('close', () => {
-        console.log('Connection closed.');
-    });
+    ws.on('close', () => console.log('Connection closed.'));
 });
 
 app.use(express.static('public'));
