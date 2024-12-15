@@ -1,71 +1,85 @@
-# latency-bandwidth-simulator
 
-## Description
-This repository hosts a simple web application designed to simulate latency and bandwidth usage in a real-world application scenario. The app allows users to interact with a frontend UI that initiates a server communication process. It dynamically showcases the impact of latency and bandwidth usage on user interactions, providing an educational and illustrative tool for demonstrating network performance.
+# Latency and Bandwidth Simulator
+
+This project provides a real-time WebSocket-based game application designed to simulate network latency and bandwidth conditions. It includes a client application and a server to measure latency and test various payload sizes under simulated conditions.
 
 ## Features
-- **Dynamic Interaction**: A slider to choose between "Light," "Medium," and "Heavy" AR app simulations, which adjusts the transmitted and received data size.
-- **RTT Display**: Displays the round-trip time (RTT) in milliseconds, refreshing every second.
-- **Color Feedback**: The app dynamically changes its color based on server responses, ensuring visual appeal while maintaining readability.
-- **Bandwidth Simulation**: Sends and receives payloads sized to mimic AR application data requirements.
-- **Dockerized Deployment**: Includes a Dockerfile for easy containerization and deployment.
 
-## How to Run Locally
+- **WebSocket Communication**: Real-time communication between the client and server.
+- **Latency Measurement**: Measures round-trip latency using WebSocket `ping-pong` messages.
+- **Payload Simulation**: Adjust the payload size dynamically to simulate light, medium, heavy, or no payloads.
+- **Stop/Restart Game**: Allows stopping and restarting the game for testing purposes.
+- **Responsive Design**: A canvas-based game playable in a web browser.
+- **Configurable WebSocket Server**: Runs in a containerized environment for easy deployment.
+
+## Setup and Usage
 
 ### Prerequisites
-1. **Node.js**: Install the latest LTS version from [Node.js](https://nodejs.org/).
-2. **Docker** (Optional): Install Docker from [Docker's official website](https://www.docker.com/).
 
-### Steps to Run
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/your-username/latency-bandwidth-simulator.git
-   cd latency-bandwidth-simulator
-   ```
+1. **Docker**: Install Docker to build and run the container.
+2. **Node.js**: Required for local development.
+3. **AWS ECS** (optional): For deploying the server in the cloud.
 
-2. Install dependencies:
+### Clone the Repository
+
+```bash
+git clone https://github.com/dimitrisgiannopoulos/latency-bandwidth-simulator.git
+cd latency-bandwidth-simulator
+```
+
+### Running Locally
+
+#### Using Node.js
+
+1. Install dependencies:
    ```bash
    npm install
    ```
-
-3. Start the application:
+2. Start the server:
    ```bash
    node server.js
    ```
+3. Open your browser at `http://localhost:3000`.
 
-4. Open your browser and navigate to:
-   ```
-   http://localhost:3000
-   ```
+#### Using Docker
 
-### Running with Docker
 1. Build the Docker image:
    ```bash
-   docker build -t latency-bandwidth-simulator .
+   docker build -t dimitrisgian/latency-bandwidth-simulator .
    ```
-
 2. Run the Docker container:
    ```bash
-   docker run -p 3000:3000 latency-bandwidth-simulator
+   docker run -it --rm -p 3000:3000 dimitrisgian/latency-bandwidth-simulator
    ```
+3. Open your browser at `http://localhost:3000`.
 
-3. Open your browser and navigate to:
-   ```
-   http://localhost:3000
-   ```
+### Payload Slider Settings
 
-## How to Use
-1. **Select AR Level**: Use the slider to choose between "Light," "Medium," and "Heavy" levels. This determines the size of the data transmitted and received.
-2. **Simulate Interaction**: Click the "Simulate" button to send a request to the server and see the RTT displayed in milliseconds.
-3. **Observe Bandwidth and Latency Effects**: Notice the page's color changing and the RTT display, indicating server communication and response times.
+The application includes a payload slider with the following options:
 
-## Technical Details
-- **Frontend**: HTML, CSS, and JavaScript for user interaction and dynamic updates.
-- **Backend**: Node.js with Express.js to handle server requests and simulate payload responses.
-- **Payload Sizes**:
-  - Light: 2 MB
-  - Medium: 5 MB
-  - Heavy: 10 MB
+- **No Payload**: Simulates zero additional payload in the client's and server's messages.
+- **Light**: Sends a payload of about 100 KB in the client's and about 2 MB in the server's messages.
+- **Medium**: Sends a payload of about 500 KB in the client's and about 5 MB in the server's messages.
+- **Heavy**: Sends a payload of about 1 MB in the client's and about 10 MB in the server's messages.
+
+Adjusting the slider updates the payload size dynamically during gameplay. The reason, is to simulate heavier applications, which normally send heavier payloads.
+
+## Starting the Game
+
+- **Start Game**: Use the "Start Game" button to connect and start the game.
+
+## Measuring Latency
+
+The application measures round-trip time (RTT) as the latency:
+
+1. The client sends a `ping` message with a timestamp.
+2. The server responds with a `pong` message.
+3. The client calculates latency as the time difference between sending and receiving the messages.
+
+## Known Issues
+
+- High payload sizes (e.g., Heavy) may lead to increased CPU usage and browser lag.
 
 ## License
-This project is licensed under the Apache 2.0 License. See the `LICENSE` file for details.
+
+This project is open-source and available under the [Apache 2.0 License](LICENSE).

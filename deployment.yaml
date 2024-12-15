@@ -17,6 +17,7 @@ spec:
       containers:
       - name: latency-bandwidth-simulator
         image: dimitrisgian/latency-bandwidth-simulator:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 3000
 ---

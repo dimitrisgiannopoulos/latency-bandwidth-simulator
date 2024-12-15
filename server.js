@@ -19,14 +19,14 @@ let gameInterval = null;
 
 // Define padding levels
 const paddingLevels = {
-    // Light: 0               // 0 bytes
+    NoPadding: 0,          // No padding
     Light: 2 * 1024 * 1024,  // 2 MB
     Medium: 5 * 1024 * 1024, // 5 MB
     Heavy: 10 * 1024 * 1024  // 10 MB
 };
 
 // Default padding level
-let selectedPaddingLevel = 'Light';
+let selectedPaddingLevel = 'NoPadding';
 
 function resetGameState() {
     gameState = {
