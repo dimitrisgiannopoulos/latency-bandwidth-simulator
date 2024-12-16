@@ -7,10 +7,12 @@ This project provides a real-time WebSocket-based game designed to simulate netw
 
 - **WebSocket Communication**: Real-time communication between the client and server for gameplay and latency simulation.
 - **Latency Measurement**: Measures round-trip latency using WebSocket `ping-pong` messages.
-- **Payload Simulation**: Dynamically adjustable payload sizes to simulate varying levels of network load (e.g., Light, Medium, Heavy, or No Payload).
+- **Payload Simulation**: Dynamically adjustable payload sizes to simulate varying levels of network load (e.g., Light, Medium, Heavy, or No Payload). Payload can also be configured via a URL parameter (`load=NoPadding/Light/Medium/Heavy`) or dynamically toggled using the UI.
 - **Frame Updates**: The client updates the game state only when new data is received from the server.
 - **Configurable Frame Rate**: The server frame rate and padding frequency are configurable in the code, with the current setup transmitting padded messages every 500ms to simulate state synchronization.
 - **Responsive Gameplay**: A canvas-based game playable in a web browser, including paddle movement and a bouncing ball.
+- **Auto Mode**: Toggleable feature to enable automated paddle movement based on the ball's position. Auto mode can also be enabled via a URL parameter (`auto=true`) or dynamically toggled using the UI.
+- **Keyboard Controls**: Arrow keys allow manual paddle control alongside automated features.
 
 ## Simulation Details
 
@@ -76,6 +78,9 @@ cd latency-bandwidth-simulator
     - **State Sync**: The server sends padded messages every 500ms to simulate state synchronization.
 3. **Client Padding**:
     - Padded messages are sent to the server each time a move action is triggered (e.g., paddle movement).
+4. **Auto Mode**:
+    - Enable auto mode using the toggle in the UI or by adding `?auto=true` to the URL.
+    - Auto mode dynamically adjusts paddle movement to align with the ball's position.
 
 ## Measuring Latency
 

@@ -40,7 +40,6 @@
             margin: 0;
             font-family: Arial, sans-serif;
         }
-    
         #payloadControl {
             text-align: center;
             margin-bottom: 20px;
@@ -55,6 +54,14 @@
             display: inline-block;
             width: 80px;
         }
+        #autoControl {
+            margin-top: 20px;
+            text-align: center;
+        }
+        #autoToggle {
+            margin-left: 10px;
+            transform: scale(1.2);
+        }
     </style>
 </head>
 <body>
@@ -66,10 +73,14 @@
         <input type="range" id="payloadSize" min="0" max="3" step="1" value="0">
         <span id="payloadLabel">No Padding</span>
     </div>
+    <div id="autoControl">
+        <label for="autoToggle">Auto Mode:</label>
+        <input type="checkbox" id="autoToggle">
+    </div>
     <div id="controls">
         <button id="leftButton">Left</button>
         <button id="rightButton">Right</button>
-    </div>    
+    </div>
 
     <script>
         const canvas = document.getElementById('gameCanvas');
@@ -80,6 +91,8 @@
         const rightButton = document.getElementById('rightButton');
         const payloadSizeSlider = document.getElementById('payloadSize');
         const payloadLabel = document.getElementById('payloadLabel');
+        const autoToggle = document.getElementById('autoToggle');
+
         const paddingLevels = {
             NoPadding: 0,          // No padding
             Light: 50 * 1024,     // 50 KB
@@ -93,8 +106,10 @@
             Heavy: 'X'.repeat(paddingLevels.Heavy),
         };
         const serverUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`;
-        let selectedPayloadSize = 'NoPadding'; 
         let ws = null;
+        let autoPlayInterval = null;
+        let autoMode = false;
+        let selectedPayloadSize = 'NoPadding';
         let gameState = {
             ball: { x: 250, y: 250 },
             paddle: { x: 200, width: 100 },
@@ -102,68 +117,64 @@
             gameOver: false,
         };
 
-        // WebSocket connection
+        const urlParams = new URLSearchParams(window.location.search);
+        autoMode = urlParams.get('auto') === 'true'; // Get auto mode from URL
+        const loadLevel = urlParams.get('load');
+
+        // Initialize payload size from URL
+        if (loadLevel && Object.keys(paddingLevels).includes(loadLevel)) {
+            selectedPayloadSize = loadLevel;
+            const sliderValue = Object.keys(paddingLevels).indexOf(loadLevel);
+            payloadSizeSlider.value = sliderValue;
+            payloadLabel.textContent = loadLevel;
+        }
+
         function connectWebSocket(callback) {
             if (ws && ws.readyState === WebSocket.OPEN) {
                 callback();
                 return;
             }
-        
+
             ws = new WebSocket(serverUrl);
-            
             ws.onopen = () => {
-                console.log("WebSocket connection established with", serverUrl);
+                console.log("WebSocket connection established");
                 measureLatency();
                 ws.send(JSON.stringify({ type: 'updatePadding', level: selectedPayloadSize }));
                 if (callback) callback();
             };
-        
+
             ws.onmessage = (event) => {
                 const message = event.data;
-            
+
                 // Skip padding messages
                 if (typeof message === 'string' && message.startsWith('PADDING:')) {
                     return;
                 }
-            
-                // Process game state and other prefixed messages
+
+                // Process game state and latency updates
                 if (message.startsWith('DATA:')) {
-                    try {
-                        const data = JSON.parse(message.slice(5)); // Remove `DATA:` prefix and parse
-                        if (data.type === 'gameState') {
-                            gameState = data.gameState;
-                        } else if (data.type === 'gameOver') {
-                            alert(`Game Over! Your score: ${data.score}`);
-                        }
-                    } catch (err) {
-                        console.error('Error parsing DATA message:', err);
+                    const data = JSON.parse(message.slice(5));
+                    if (data.type === 'gameState') {
+                        gameState = data.gameState;
                     }
-                    return;
-                }
-            
-                // Handle JSON messages like pong or errors
-                try {
+                } else if (message.startsWith('{')) {
                     const data = JSON.parse(message);
                     if (data.type === 'pong') {
                         const latency = Date.now() - data.time;
                         updateLatencyDisplay(latency);
-                    } else {
-                        console.warn('Unknown JSON message received:', data);
                     }
-                } catch (err) {
-                    console.error('Unknown message format:', message);
                 }
-            };            
-        
-            ws.onclose = () => {
-                console.log('WebSocket connection closed.');
             };
-        
+
+            ws.onclose = () => {
+                console.log("WebSocket connection closed.");
+            };
+
             ws.onerror = (err) => {
-                console.error('WebSocket error:', err);
+                console.error("WebSocket error:", err);
             };
         }
-    
+
         function measureLatency() {
             setInterval(() => {
                 if (ws && ws.readyState === WebSocket.OPEN) {
@@ -172,14 +183,51 @@
                 }
             }, 1000);
         }
-    
+
         function updateLatencyDisplay(latency) {
             latencyDisplay.textContent = `Latency: ${latency} ms`;
             latencyDisplay.style.color = latency <= 50 ? 'green' : latency <= 150 ? 'orange' : 'red';
         }
-    
+
+        function startAutoPlay() {
+            if (autoPlayInterval) clearInterval(autoPlayInterval);
+            autoPlayInterval = setInterval(() => {
+                const paddleCenter = gameState.paddle.x + gameState.paddle.width / 2;
+                const deadZone = 10;
+                const distance = gameState.ball.x - paddleCenter;
+
+                if (Math.abs(distance) > deadZone) {
+                    movePaddle(distance > 0 ? 'right' : 'left');
+                }
+            }, 50);
+        }
+
+        function autoStartGame() {
+            connectWebSocket(() => {
+                ws.send(`DATA:${JSON.stringify({ type: 'startGame' })}`);
+                startAutoPlay();
+            });
+        }
+
+        function stopAutoPlay() {
+            if (autoPlayInterval) clearInterval(autoPlayInterval);
+        }
+
+        startButton.addEventListener('click', () => {
+            connectWebSocket(() => {
+                ws.send(`DATA:${JSON.stringify({ type: 'startGame' })}`);
+                if (autoMode) startAutoPlay();
+            });
+        });
+
+        autoToggle.addEventListener('change', () => {
+            autoMode = autoToggle.checked;
+            if (autoMode) startAutoPlay();
+            else stopAutoPlay();
+        });
+
         payloadSizeSlider.addEventListener('input', () => {
-            const levels = ['No Padding', 'Light', 'Medium', 'Heavy'];
+            const levels = Object.keys(paddingLevels);
             selectedPayloadSize = levels[payloadSizeSlider.value];
             payloadLabel.textContent = selectedPayloadSize;
             if (ws && ws.readyState === WebSocket.OPEN) {
@@ -199,18 +247,18 @@
 
         leftButton.addEventListener('click', () => movePaddle('left'));
         rightButton.addEventListener('click', () => movePaddle('right'));
-    
+
         // Event listeners for keyboard controls
         document.addEventListener('keydown', (e) => {
             if (e.key === 'ArrowLeft') movePaddle('left');
             if (e.key === 'ArrowRight') movePaddle('right');
         });
-    
+
         // Start the game
         startButton.addEventListener('click', () => {
             connectWebSocket(() => ws.send(`DATA:${JSON.stringify({ type: 'startGame' })}`));
         });
-    
+
         function render() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.beginPath();
@@ -218,13 +266,22 @@
             ctx.fillStyle = 'blue';
             ctx.fill();
             ctx.closePath();
+
             ctx.fillStyle = 'black';
             ctx.fillRect(gameState.paddle.x, 480, gameState.paddle.width, 10);
+
             ctx.font = '16px Arial';
             ctx.fillText(`Score: ${gameState.score}`, 10, 20);
+
             requestAnimationFrame(render);
         }
+
         render();
+
+        if (autoMode) {
+            autoToggle.checked = true;
+            autoStartGame();
+        }
     </script>
 </body>
 </html>
